@@ -55,8 +55,19 @@ class CalPol(object):
         parameterType="Optional",
         direction="Input")
 
+        # Define el parámetro de capa de salida
+        capaSalida = arcpy.Parameter(
+        displayName="Capa de salida",
+        name="capa_entrada",
+        datatype=["GPFeatureLayer","DEFeatureClass","DETable","GPTableView"],
+        parameterType="Required",
+        direction="Output")
 
-        params = [capaEntrada,folderEntrada,geomZM]
+        capaSalida.parameterDependencies = [capaEntrada.name]
+        capaSalida.schema.clone = True
+
+
+        params = [capaEntrada,folderEntrada,geomZM,capaSalida]
         return params
 
     def isLicensed(self):
