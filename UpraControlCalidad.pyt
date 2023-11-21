@@ -55,20 +55,61 @@ class CalPol(object):
         parameterType="Optional",
         direction="Input")
 
+        # # Define el parámetro de la validación de validación de geometria
+        # geomVal = arcpy.Parameter(
+        # displayName="Validar Errores geométricos",
+        # name="geomVal",
+        # datatype=["GPBoolean"],
+        # parameterType="Optional",
+        # direction="Input")
+
+        # # Define el parámetro de la validación de geometrias multipart
+        # multipartVal = arcpy.Parameter(
+        # displayName="Validar geometrías multipart",
+        # name="multipartVal",
+        # datatype=["GPBoolean"],
+        # parameterType="Optional",
+        # direction="Input")
+
+        # # Define el parámetro de la validación de elementos duplicados
+        # duplicadosVal = arcpy.Parameter(
+        # displayName="Validar elementos duplicados",
+        # name="duplicadosVal",
+        # datatype=["GPBoolean"],
+        # parameterType="Optional",
+        # direction="Input")
+
+        # # Define el parámetro de la validación topológica
+        # topologiaVal = arcpy.Parameter(
+        # displayName="Validar topología",
+        # name="topologiaVal",
+        # datatype=["GPBoolean"],
+        # parameterType="Optional",
+        # direction="Input")
+
+
+        # # Define el parámetro de la validación del sistema de referencia
+        # sisRefVal = arcpy.Parameter(
+        # displayName="Validar sistema de referencia",
+        # name="sisRefVal",
+        # datatype=["GPBoolean"],
+        # parameterType="Optional",
+        # direction="Input")
+
         # Define el parámetro de capa de salida
-        capaSalida = arcpy.Parameter(
+        capaEvaluada = arcpy.Parameter(
         displayName="Capa de salida",
-        name="capa_entrada",
+        name="capaEvaluada",
         datatype=["GPFeatureLayer","DEFeatureClass","DETable","GPTableView"],
-        parameterType="Required",
+        parameterType="Derived",
         direction="Output")
 
-        capaSalida.parameterDependencies = [capaEntrada.name]
-        capaSalida.schema.clone = True
+        capaEvaluada.parameterDependencies = [capaEntrada.name]
+        capaEvaluada.schema.clone = True
 
 
-        params = [capaEntrada,folderEntrada,geomZM,capaSalida]
-        return params
+        parameters  = [capaEntrada,folderEntrada,geomZM,capaEvaluada]
+        return parameters 
 
     def isLicensed(self):
         """Set whether tool is licensed to execute."""
@@ -100,6 +141,8 @@ class CalPol(object):
         reporte.write("Ruta de la capa: %s\n"%(str(arcpy.Describe(capaEntrada.value).catalogpath)))
 
         self.evaluarParametros(reporte,parameters)
+
+        #arcpy.SetParameterAsText(len(parameters)-1, capaEntrada)
 
         return
 
