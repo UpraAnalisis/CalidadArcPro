@@ -33,27 +33,48 @@ class CalPol(object):
         """Define parameter definitions"""
        # Define el parámetro de capa de entrada
         capaEntrada = arcpy.Parameter(
-        displayName="Capa de entrada",
-        name="capa_entrada",
-        datatype=["GPFeatureLayer","DEFeatureClass","DETable","GPTableView"],
-        parameterType="Required",
-        direction="Input")
+        displayName ="Capa de entrada",
+        name = "capa_entrada",
+        datatype = ["GPFeatureLayer","DEFeatureClass","DETable","GPTableView"],
+        parameterType = "Required",
+        direction = "Input")
 
         # Define el parámetro de la ruta del reporte
         folderEntrada = arcpy.Parameter(
-        displayName="Ruta reporte",
-        name="ruta_reporte",
-        datatype=["DEWorkspace"],
-        parameterType="Required",
-        direction="Input")
+        displayName = "Ruta reporte",
+        name = "ruta_reporte",
+        datatype = "DEWorkspace",
+        parameterType = "Required",
+        direction = "Input")
 
         # Define el parámetro de la validación de Geometrías Z y M
         geomZM = arcpy.Parameter(
-        displayName="Validar geometrías Z y M ",
-        name="geomZM",
-        datatype=["GPBoolean"],
-        parameterType="Optional",
+        displayName = "Validar geometrías Z y M ",
+        name = "geomZM",
+        datatype = "GPBoolean",
+        parameterType = "Optional",
+        direction = "Input")
+
+        # # Define el parámetro de la validación de topología 
+        evalTop = arcpy.Parameter(
+        displayName ="Validar Topología",
+        name="evalTop",
+        datatype = "GPBoolean",
+        parameterType = "Optional",
         direction="Input")
+
+        # # Define el tipo de regla de la validación de topología 
+        reglaTop = arcpy.Parameter(
+        displayName="Reglas Topología",
+        name="reglaTop",
+        datatype = "GPString",
+        parameterType = "Optional",
+        direction = "Input")
+        
+        reglaTop.type = 'ValueList'
+        reglaTop.filter.list = ["Huecos y sobreposición", "Huecos", "Sobreposición"]
+        reglaTop.value = "Huecos y sobreposición"
+        
 
         # # Define el parámetro de la validación de validación de geometria
         # geomVal = arcpy.Parameter(
@@ -108,7 +129,7 @@ class CalPol(object):
         capaEvaluada.schema.clone = True
 
 
-        parameters  = [capaEntrada,folderEntrada,geomZM,capaEvaluada]
+        parameters  = [capaEntrada, folderEntrada, geomZM, evalTop, reglaTop, capaEvaluada]
         return parameters 
 
     def isLicensed(self):
@@ -171,6 +192,7 @@ class CalPol(object):
     def evaluarParametros(self,reporte,parameters):
         capaEntrada = parameters[0].value
         val_zm = parameters[2].value
+        evalTop = parameters[3].value
 
         ##################### VALIDACION Z Y M ##########################
         if val_zm is True:
@@ -188,4 +210,13 @@ class CalPol(object):
             else:
                 reporte.write("La capa no tiene ni Z ni M en su geometría" + " \n")
         ####################################################################
+
+        ##################### VALIDACION topologia ##########################
+        if evalTop is True:
+            arcpy.AddMessage("Validacion de topología \n")
+            reporte.write("###### Validación de topología ######")
+            reporte.write('\n')
+            
+
+         ####################################################################
        
