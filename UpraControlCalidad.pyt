@@ -5,6 +5,13 @@ import os
 import sys
 import datetime
 
+contador = 0
+gdb_salida = ""
+PROYECCION = "PROJCS['MAGNA_Colombia_Bogota',GEOGCS['GCS_MAGNA',DATUM['D_MAGNA',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Transverse_Mercator'],PARAMETER['False_Easting',1000000.0],PARAMETER['False_Northing',1000000.0],PARAMETER['Central_Meridian',-74.07750791666666],PARAMETER['Scale_Factor',1.0],PARAMETER['Latitude_Of_Origin',4.596200416666666],UNIT['Meter',1.0]];-4623200 -9510300 10000;-100000 10000;-100000 10000;0,001;0,001;0,001;IsHighPrecision"
+
+contador = 0
+gdb_salida = ""
+
 class Toolbox(object):
     
     def __init__(self):
@@ -23,7 +30,7 @@ class CalPol(object):
 
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
-        self.label = "Polígonos"
+        self.label = "Calidad Polígonos"
         self.description = "Herramienta para el control de calidad de capas vectoriales con geometría de tipo polígono"
         self.canRunInBackground = False
         self.conteo_validador = 0
@@ -42,7 +49,7 @@ class CalPol(object):
         # Define el parámetro de la ruta del reporte
         folderEntrada = arcpy.Parameter(
         displayName = "Ruta reporte",
-        name = "ruta_reporte",
+        name = "folder_reporte",
         datatype = "DEWorkspace",
         parameterType = "Required",
         direction = "Input")
@@ -66,7 +73,7 @@ class CalPol(object):
         # # Define el tipo de regla de la validación de topología 
         reglaTop = arcpy.Parameter(
         displayName="Reglas Topología",
-        name="reglaTop",
+        name = "reglaTop",
         datatype = "GPString",
         parameterType = "Optional",
         direction = "Input")
@@ -120,7 +127,7 @@ class CalPol(object):
         # Define el parámetro de capa de salida
         capaEvaluada = arcpy.Parameter(
         displayName="Capa de salida",
-        name="capaEvaluada",
+        name ="capaEvaluada",
         datatype=["GPFeatureLayer","DEFeatureClass","DETable","GPTableView"],
         parameterType="Derived",
         direction="Output")
@@ -140,6 +147,15 @@ class CalPol(object):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
         has been changed."""
+
+        paramEvalTopologia = [param for param in parameters if param.name == "evalTop"][0]
+        paramReglaTopologia = [param for param in parameters if param.name == "reglaTop"][0]
+
+        if paramEvalTopologia.value:
+            paramReglaTopologia.enabled = True
+        else:
+            paramReglaTopologia.enabled = False
+
         return
 
     def updateMessages(self, parameters):
@@ -154,7 +170,7 @@ class CalPol(object):
         capaEntrada = parameters[0]
         folderEntrada = parameters[1]
         
-        archivo =r"%s\RCAL_%s_%s.txt"%(folderEntrada.value,arcpy.Describe(capaEntrada.value).name, fecha)
+        archivo =r"%s\RCAL_%s_%s.txt"%(folderEntrada.value,arcpy.Describe(capaEntrada.value).name[:5], fecha)
         reporte = open(archivo,"w")
         reporte.write("Fecha: %s\n"%(fecha))
         reporte.write("Usuario: %s\n"%(usuario))
@@ -162,8 +178,6 @@ class CalPol(object):
         reporte.write("Ruta de la capa: %s\n"%(str(arcpy.Describe(capaEntrada.value).catalogpath)))
 
         self.evaluarParametros(reporte,parameters)
-
-        #arcpy.SetParameterAsText(len(parameters)-1, capaEntrada)
 
         return
 
@@ -190,20 +204,27 @@ class CalPol(object):
 
     
     def evaluarParametros(self,reporte,parameters):
-        capaEntrada = parameters[0].value
-        val_zm = parameters[2].value
-        evalTop = parameters[3].value
+        global contador
+        global gdb_salida
+        contador = 0
+        paramCapaEntrada = [param for param in parameters if param.name == "capa_entrada"][0]
+        paramCapaEntrada = [param for param in parameters if param.name == "capa_entrada"][0]
+        paramFolder_reporte = [param for param in parameters if param.name == "folder_reporte"][0]
+        paramval_zm = [param for param in parameters if param.name == "geomZM"][0]
+        paramEvalTop = [param for param in parameters if param.name == "evalTop"][0]
+        paramReglaTop = [param for param in parameters if param.name == "reglaTop"][0]
+
 
         ##################### VALIDACION Z Y M ##########################
-        if val_zm is True:
+        if paramval_zm.value is True:
             arcpy.AddMessage("Validacion ZM \n")
             reporte.write("###### Validación de geometrias Z y M ######")
             reporte.write('\n')
-            if self.tiene_m(capaEntrada) or self.tiene_z(capaEntrada):
-                if self.tiene_m(capaEntrada):
+            if self.tiene_m(paramCapaEntrada.value) or self.tiene_z(paramCapaEntrada.value):
+                if self.tiene_m(paramCapaEntrada.value):
                     reporte.write("La capa tiene M en su geometría" + " \n")
                     self.conteo_validador+=1
-                if self.tiene_z(capaEntrada):
+                if self.tiene_z(paramCapaEntrada.value):
                     reporte.write("La capa tiene Z en su geometría" + " \n")
                     self.conteo_validador+=1
                 reporte.write('\n')
@@ -211,12 +232,91 @@ class CalPol(object):
                 reporte.write("La capa no tiene ni Z ni M en su geometría" + " \n")
         ####################################################################
 
-        ##################### VALIDACION topologia ##########################
-        if evalTop is True:
+        ##################### VALIDACION topología ##########################
+        if paramEvalTop.value is True:
             arcpy.AddMessage("Validacion de topología \n")
             reporte.write("###### Validación de topología ######")
             reporte.write('\n')
-            
 
+            nombre_gdb = f"topo_{datetime.datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"
+            nombre_gdb = nombre_gdb.replace(".", "")
+            gdb_salida = f"{paramFolder_reporte.value}/{nombre_gdb}.gdb"
+            nombre_dataset = "dt_topologia"
+
+            if not arcpy.Exists(gdb_salida):
+                arcpy.management.CreateFileGDB(paramFolder_reporte.value, nombre_gdb)
+
+            arcpy.env.workspace = gdb_salida
+            nombre_capa = arcpy.Describe(paramCapaEntrada.value).name
+
+            arcpy.management.CreateFeatureDataset(gdb_salida, nombre_dataset, PROYECCION)
+            path_dataset = os.path.join(gdb_salida, nombre_dataset)    
+
+            arcpy.conversion.FeatureClassToFeatureClass(paramCapaEntrada.value, path_dataset, nombre_capa)
+            path_Feature = os.path.join(path_dataset, nombre_capa)
+
+            capa_topologia = f"topo_capa_{nombre_capa}"
+            arcpy.management.CreateTopology(path_dataset, capa_topologia, "")
+            path_topology = os.path.join(path_dataset, capa_topologia)
+
+            arcpy.management.AddFeatureClassToTopology(path_topology, path_Feature, "1", "1")
+            ErroresTopologia =""
+            if paramReglaTop.value == "Huecos y sobreposición":
+                arcpy.management.AddRuleToTopology(path_topology, "Must Not Overlap (Area)", path_Feature, "", "", "")
+                arcpy.management.AddRuleToTopology(path_topology, "Must Not Have Gaps (Area)", path_Feature, "", "", "")
+                arcpy.management.ValidateTopology(path_topology, "Full_Extent")
+                arcpy.management.ExportTopologyErrors(path_topology, path_dataset, "Errores")
+
+                ErroresTopologia = f"#####Validación de topología (Huecos - Sobreposición) ######\n"
+                for fc in arcpy.ListFeatureClasses(feature_dataset=nombre_dataset):
+                    path = os.path.join(arcpy.env.workspace, nombre_dataset, fc)
+                    if "Errores" in arcpy.Describe(path).name:
+                        Ctd_contar = arcpy.management.GetCount(path)
+                        Ctd = int(Ctd_contar.getOutput(0))
+                        if Ctd > 0:
+                            if "line" in str(arcpy.Describe(path).name):
+                                if Ctd > 1:
+                                    contador += 1
+                                    ErroresTopologia += f"La capa presenta {Ctd} casos de huecos.\n"
+                            elif "poly" in str(arcpy.Describe(path).name):
+                                contador += 1
+                                ErroresTopologia += f"La capa presenta {Ctd} casos de sobreposición.\n"
+
+                                oid_campo = [f.name for f in arcpy.Describe(path_Feature).fields if f.type == "OID"][0]
+                                arreglo = []
+                                with arcpy.da.SearchCursor(path, ["OID@", "OriginObjectID", "DestinationObjectID", "RuleDescription"]) as cursor:
+                                    for fila in cursor:
+                                        if "Larger Than" in fila[3]:
+                                            pass
+                                        else:
+                                            arreglo.append(fila[1])
+                                            arreglo.append(fila[2])
+                                if len(arreglo) > 0:
+                                    if len(arreglo) == 1:
+                                        ErroresTopologia += f"Los siguientes OID presentan sobreposición {oid_campo} in {str(tuple(list(set(arreglo)))).replace(',', '')}\n"
+                                    else:
+                                        ErroresTopologia += f"Los siguientes OID presentan sobreposición {oid_campo} in {str(tuple(list(set(arreglo))))}\n"
+
+                ErroresTopologia += f"Para validar los errores topológicos por favor consulte el siguiente dataset {path_dataset}"
+            elif paramReglaTop.value == "Huecos":
+                arcpy.management.AddRuleToTopology(path_topology, "Must Not Have Gaps (Area)", path_Feature, "", "", "")
+                arcpy.management.ValidateTopology(path_topology, "Full_Extent")
+                arcpy.management.ExportTopologyErrors(path_topology, path_dataset, "Errores")
+
+                ErroresTopologia = f"#####Validación de topología (Huecos) ######\n"
+                for fc in arcpy.ListFeatureClasses(feature_dataset=nombre_dataset):
+                    path = os.path.join(arcpy.env.workspace, nombre_dataset, fc)
+                    if "Errores" in arcpy.Describe(path).name:
+                        Ctd_contar = arcpy.management.GetCount(path)
+                        Ctd = int(Ctd_contar.getOutput(0))
+                        if Ctd > 1:
+                            if "line" in str(arcpy.Describe(path).name):
+                                contador += 1
+                                ErroresTopologia += f"La capa presenta {Ctd} casos de huecos.\n"
+
+            
+            
+            
+            arcpy.AddWarning(ErroresTopologia)
          ####################################################################
        
