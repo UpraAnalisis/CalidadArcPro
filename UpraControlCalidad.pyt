@@ -206,6 +206,7 @@ class CalPol(object):
     def evaluarParametros(self,reporte,parameters):
         global contador
         global gdb_salida
+        parametros_errores = {}
         contador = 0
         paramCapaEntrada = [param for param in parameters if param.name == "capa_entrada"][0]
         paramCapaEntrada = [param for param in parameters if param.name == "capa_entrada"][0]
@@ -216,11 +217,14 @@ class CalPol(object):
 
 
         ##################### VALIDACION Z Y M ##########################
+
+        
         if paramval_zm.value is True:
             arcpy.AddMessage("Validacion ZM \n")
             reporte.write("###### Validación de geometrias Z y M ######")
             reporte.write('\n')
             if self.tiene_m(paramCapaEntrada.value) or self.tiene_z(paramCapaEntrada.value):
+                parametros_errores.update({paramval_zm.name : True})
                 if self.tiene_m(paramCapaEntrada.value):
                     reporte.write("La capa tiene M en su geometría" + " \n")
                     self.conteo_validador+=1
@@ -229,6 +233,7 @@ class CalPol(object):
                     self.conteo_validador+=1
                 reporte.write('\n')
             else:
+                parametros_errores.update({paramval_zm.name : False})
                 reporte.write("La capa no tiene ni Z ni M en su geometría" + " \n")
         ####################################################################
 
@@ -237,6 +242,8 @@ class CalPol(object):
             arcpy.AddMessage("Validacion de topología \n")
             reporte.write("###### Validación de topología ######")
             reporte.write('\n')
+
+            ACALARACION = """Los OID (Object id: identificadores de objeto) reportados en el ensaje de error corresponden a la copia de la capa, no a la capa real. Por favor haga las validaciones sobre la capa real teniendo en cuenta la copia de la capa como referencia."""
 
             nombre_gdb = f"topo_{datetime.datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"
             nombre_gdb = nombre_gdb.replace(".", "")
@@ -271,6 +278,7 @@ class CalPol(object):
                 for fc in arcpy.ListFeatureClasses(feature_dataset=nombre_dataset):
                     path = os.path.join(arcpy.env.workspace, nombre_dataset, fc)
                     if "Errores" in arcpy.Describe(path).name:
+                        parametros_errores.update({paramEvalTop.name : True})
                         Ctd_contar = arcpy.management.GetCount(path)
                         Ctd = int(Ctd_contar.getOutput(0))
                         if Ctd > 0:
@@ -278,6 +286,7 @@ class CalPol(object):
                                 if Ctd > 1:
                                     contador += 1
                                     ErroresTopologia += f"La capa presenta {Ctd} casos de huecos.\n"
+
                             elif "poly" in str(arcpy.Describe(path).name):
                                 contador += 1
                                 ErroresTopologia += f"La capa presenta {Ctd} casos de sobreposición.\n"
@@ -294,10 +303,13 @@ class CalPol(object):
                                 if len(arreglo) > 0:
                                     if len(arreglo) == 1:
                                         ErroresTopologia += f"Los siguientes OID presentan sobreposición {oid_campo} in {str(tuple(list(set(arreglo)))).replace(',', '')}\n"
+                                        ErroresTopologia += ACALARACION + "\n"
                                     else:
                                         ErroresTopologia += f"Los siguientes OID presentan sobreposición {oid_campo} in {str(tuple(list(set(arreglo))))}\n"
-
-                ErroresTopologia += f"Para validar los errores topológicos por favor consulte el siguiente dataset {path_dataset}"
+                                        ErroresTopologia += ACALARACION + "\n"
+                        ErroresTopologia += f"Para validar los errores topológicos por favor consulte el siguiente dataset {path_dataset}"
+                    else:
+                        parametros_errores.update({paramEvalTop.name : False})
             elif paramReglaTop.value == "Huecos":
                 arcpy.management.AddRuleToTopology(path_topology, "Must Not Have Gaps (Area)", path_Feature, "", "", "")
                 arcpy.management.ValidateTopology(path_topology, "Full_Extent")
@@ -313,10 +325,42 @@ class CalPol(object):
                             if "line" in str(arcpy.Describe(path).name):
                                 contador += 1
                                 ErroresTopologia += f"La capa presenta {Ctd} casos de huecos.\n"
+                                ErroresTopologia += ACALARACION + "\n"
 
-            
-            
-            
+            elif paramReglaTop.value == "Sobreposición":
+
+                arcpy.management.AddRuleToTopology(path_topology, "Must Not Overlap (Area)", path_Feature, "", "", "")
+                arcpy.management.ValidateTopology(path_topology, "Full_Extent")
+                arcpy.management.ExportTopologyErrors(path_topology, path_dataset, "Errores")
+
+                ErroresTopologia = f"#####Validación de topología (Sobreposición) ######\n\n"
+                for fc in arcpy.ListFeatureClasses(feature_dataset=nombre_dataset):
+                    path = os.path.join(arcpy.env.workspace, nombre_dataset, fc)
+                    if "Errores" in arcpy.Describe(path).name:
+                        Ctd_contar = arcpy.management.GetCount(path)
+                        Ctd = int(Ctd_contar.getOutput(0))
+                        if Ctd > 0:
+                            if "poly" in str(arcpy.Describe(path).name):
+                                contador += 1
+                                ErroresTopologia += f"La capa presenta {Ctd} casos de sobreposición.\n"
+                                ErroresTopologia += ACALARACION + "\n"
+
+                                oid_campo = [f.name for f in arcpy.Describe(path_Feature).fields if f.type == "OID"][0]
+                                arreglo = []
+                                with arcpy.da.SearchCursor(path, ["OID@", "OriginObjectID", "DestinationObjectID", "RuleDescription"]) as cursor:
+                                    for fila in cursor:
+                                        if "Larger Than" in fila[3]:
+                                            pass
+                                        else:
+                                            arreglo.append(fila[1])
+                                            arreglo.append(fila[2])
+                                if len(arreglo) > 0:
+                                    if len(arreglo) == 1:
+                                        ErroresTopologia += f"Los siguientes OID presentan sobreposición {oid_campo} in {str(tuple(list(set(arreglo)))).replace(',', '')}\n"
+                                        ErroresTopologia += ACALARACION + "\n"
+                                    else:
+                                        ErroresTopologia += f"Los siguientes OID presentan sobreposición {oid_campo} in {str(tuple(list(set(arreglo))))}\n"
+                                        ErroresTopologia += ACALARACION + "\n"
             arcpy.AddWarning(ErroresTopologia)
          ####################################################################
        
